@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World Trade Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 12px 20px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #58a6ff;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controls label {
+      font-size: 0.8rem;
+      color: #8b949e;
+    }
+
+    .controls select, .controls input[type=range] {
+      background: #21262d;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .controls select:focus { outline: none; border-color: #58a6ff; }
+
+    .legend-label {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+
+    #main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    #map-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    svg#map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .country {
+      stroke: #30363d;
+      stroke-width: 0.5px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .country:hover { opacity: 0.8; stroke: #58a6ff; stroke-width: 1.2px; }
+    .country.selected { stroke: #f0f6fc; stroke-width: 1.5px; }
+
+    .graticule { fill: none; stroke: #1c2128; stroke-width: 0.4px; }
+    .sphere { fill: #0d1b2a; }
+
+    /* Sidebar */
+    #sidebar {
+      width: 300px;
+      background: #161b22;
+      border-left: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #30363d;
+      background: #1c2128;
+    }
+
+    #sidebar-header h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    #sidebar-header p {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 2px;
+    }
+
+    #sidebar-content {
+      padding: 14px 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #21262d;
+      font-size: 0.82rem;
+    }
+
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { color: #8b949e; }
+    .stat-value { font-weight: 600; color: #e6edf3; text-align: right; }
+    .stat-value.positive { color: #3fb950; }
+    .stat-value.negative { color: #f85149; }
+
+    .partner-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 0.8rem;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .partner-item:last-child { border-bottom: none; }
+
+    .partner-bar-wrap {
+      flex: 1;
+      background: #21262d;
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .partner-bar {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .partner-name { width: 90px; color: #8b949e; }
+    .partner-value { width: 60px; text-align: right; color: #e6edf3; }
+
+    .section-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #58a6ff;
+      margin: 14px 0 6px;
+    }
+
+    /* Tooltip */
+    #tooltip {
+      position: absolute;
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.8rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      max-width: 220px;
+      z-index: 100;
+      line-height: 1.6;
+    }
+
+    #tooltip strong { display: block; font-size: 0.9rem; color: #58a6ff; margin-bottom: 4px; }
+    #tooltip .tip-row { display: flex; justify-content: space-between; gap: 12px; }
+    #tooltip .tip-label { color: #8b949e; }
+    #tooltip .tip-val { color: #e6edf3; font-weight: 600; }
+
+    /* Legend */
+    #legend {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(22, 27, 34, 0.9);
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+    }
+
+    #legend h4 { color: #8b949e; margin-bottom: 6px; font-weight: 500; }
+
+    .legend-gradient {
+      width: 160px;
+      height: 10px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+
+    .legend-ticks {
+      display: flex;
+      justify-content: space-between;
+      color: #8b949e;
+    }
+
+    /* Zoom controls */
+    #zoom-controls {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .zoom-btn {
+      width: 30px;
+      height: 30px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    .zoom-btn:hover { background: #21262d; }
+
+    #no-data {
+      color: #8b949e;
+      font-size: 0.82rem;
+      text-align: center;
+      margin-top: 40px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🌍 World Trade Map</h1>
+  <div class="controls">
+    <label>Metric:
+      <select id="metric-select">
+        <option value="total">Total Trade (Exports + Imports)</option>
+        <option value="exports">Exports</option>
+        <option value="imports">Imports</option>
+        <option value="balance">Trade Balance</option>
+      </select>
+    </label>
+    <label>Year:
+      <select id="year-select">
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+        <option value="2020">2020</option>
+        <option value="2019">2019</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<div id="main">
+  <div id="map-container">
+    <svg id="map"></svg>
+    <div id="zoom-controls">
+      <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
+      <button class="zoom-btn" id="zoom-out" title="Zoom out">−</button>
+      <button class="zoom-btn" id="zoom-reset" title="Reset" style="font-size:0.65rem;">⌂</button>
+    </div>
+    <div id="legend">
+      <h4 id="legend-title">Total Trade (USD)</h4>
+      <canvas class="legend-gradient" id="legend-canvas"></canvas>
+      <div class="legend-ticks" id="legend-ticks"></div>
+    </div>
+    <div id="tooltip"></div>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2 id="country-name">Click a country</h2>
+      <p id="country-sub">to view trade details</p>
+    </div>
+    <div id="sidebar-content">
+      <div id="no-data">Select a country on the map to explore its trade statistics and top trading partners.</div>
+      <div id="country-stats" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Trade Data ───────────────────────────────────────────────────────────────
+// Exports / Imports in billions USD (approximate, World Bank / WTO data)
+const tradeData = {
+  2023: {
+    "USA":  { exports: 3050, imports: 3170, partners: { exports: ["Canada","Mexico","China","Japan","UK"], imports: ["China","Mexico","Canada","Germany","Japan"] } },
+    "CHN":  { exports: 3380, imports: 2560, partners: { exports: ["USA","Japan","South Korea","Vietnam","Germany"], imports: ["Japan","South Korea","USA","Germany","Australia"] } },
+    "DEU":  { exports: 1650, imports: 1480, partners: { exports: ["USA","France","China","Netherlands","UK"], imports: ["China","Netherlands","Poland","Belgium","France"] } },
+    "JPN":  { exports: 920,  imports: 1030, partners: { exports: ["USA","China","South Korea","Australia","Taiwan"], imports: ["China","Australia","USA","South Korea","UAE"] } },
+    "GBR":  { exports: 780,  imports: 890,  partners: { exports: ["USA","Germany","France","Netherlands","Ireland"], imports: ["Germany","China","USA","France","Netherlands"] } },
+    "FRA":  { exports: 750,  imports: 820,  partners: { exports: ["Germany","USA","Italy","Spain","Belgium"], imports: ["Germany","China","Belgium","Italy","Netherlands"] } },
+    "NLD":  { exports: 960,  imports: 870,  partners: { exports: ["Germany","Belgium","France","UK","USA"], imports: ["Germany","China","Belgium","USA","Russia"] } },
+    "KOR":  { exports: 632,  imports: 642,  partners: { exports: ["China","USA","Vietnam","Japan","Australia"], imports: ["China","USA","Japan","Australia","Saudi Arabia"] } },
+    "ITA":  { exports: 620,  imports: 570,  partners: { exports: ["Germany","France","USA","Spain","UK"], imports: ["Germany","France","China","Netherlands","Spain"] } },
+    "CAN":  { exports: 598,  imports: 585,  partners: { exports: ["USA","China","UK","Japan","Mexico"], imports: ["USA","China","Mexico","Germany","Japan"] } },
+    "BEL":  { exports: 530,  imports: 530,  partners: { exports: ["Germany","France","Netherlands","UK","USA"], imports: ["Netherlands","Germany","France","China","USA"] } },
+    "MEX":  { exports: 593,  imports: 610,  partners: { exports: ["USA","Canada","China","Germany","Japan"], imports: ["USA","China","Germany","South Korea","Japan"] } },
+    "RUS":  { exports: 425,  imports: 260,  partners: { exports: ["China","India","Turkey","Belarus","Kazakhstan"], imports: ["China","India","Turkey","Germany","Belarus"] } },
+    "SAU":  { exports: 378,  imports: 212,  partners: { exports: ["China","Japan","India","South Korea","USA"], imports: ["China","USA","Germany","Japan","India"] } },
+    "SGP":  { exports: 515,  imports: 490,  partners: { exports: ["China","USA","Malaysia","Indonesia","South Korea"], imports: ["China","Malaysia","USA","South Korea","Japan"] } },
+    "IND":  { exports: 431,  imports: 714,  partners: { exports: ["USA","China","UAE","Bangladesh","Netherlands"], imports: ["China","Russia","UAE","USA","Saudi Arabia"] } },
+    "AUS":  { exports: 390,  imports: 310,  partners: { exports: ["China","Japan","South Korea","India","USA"], imports: ["China","USA","Japan","Germany","South Korea"] } },
+    "ESP":  { exports: 380,  imports: 420,  partners: { exports: ["France","Germany","Portugal","Italy","UK"], imports: ["Germany","China","France","Italy","USA"] } },
+    "BRA":  { exports: 340,  imports: 260,  partners: { exports: ["China","USA","Argentina","Netherlands","Chile"], imports: ["China","USA","Germany","Argentina","India"] } },
+    "THA":  { exports: 287,  imports: 292,  partners: { exports: ["USA","China","Japan","Vietnam","Malaysia"], imports: ["China","Japan","USA","Malaysia","Singapore"] } },
+    "TWN":  { exports: 432,  imports: 371,  partners: { exports: ["China","USA","Japan","Hong Kong","South Korea"], imports: ["China","Japan","USA","South Korea","Australia"] } },
+    "CHE":  { exports: 380,  imports: 330,  partners: { exports: ["Germany","USA","UK","France","China"], imports: ["Germany","USA","UK","China","France"] } },
+    "POL":  { exports: 318,  imports: 320,  partners: { exports: ["Germany","Czech Republic","France","UK","Netherlands"], imports: ["Germany","China","Netherlands","Russia","Czech Republic"] } },
+    "SWE":  { exports: 220,  imports: 210,  partners: { exports: ["Germany","Norway","USA","Denmark","UK"], imports: ["Germany","Netherlands","Denmark","Norway","China"] } },
+    "ZAF":  { exports: 110,  imports: 95,   partners: { exports: ["China","USA","Germany","UK","Japan"], imports: ["China","Germany","USA","India","Saudi Arabia"] } },
+    "NGA":  { exports: 62,   imports: 55,   partners: { exports: ["India","Spain","France","Netherlands","USA"], imports: ["China","India","Netherlands","USA","Belgium"] } },
+    "EGY":  { exports: 47,   imports: 86,   partners: { exports: ["Italy","Turkey","USA","Saudi Arabia","UAE"], imports: ["China","Saudi Arabia","USA","Germany","UAE"] } },
+    "ARG":  { exports: 78,   imports: 63,   partners: { exports: ["Brazil","China","USA","Chile","India"], imports: ["Brazil","China","USA","Germany","Bolivia"] } },
+    "IDN":  { exports: 258,  imports: 222,  partners: { exports: ["China","USA","Japan","India","Singapore"], imports: ["China","Singapore","Japan","Malaysia","Thailand"] } },
+    "NOR":  { exports: 307,  imports: 110,  partners: { exports: ["Germany","UK","Netherlands","Belgium","France"], imports: ["Sweden","China","Germany","Denmark","USA"] } },
+    "TUR":  { exports: 255,  imports: 362,  partners: { exports: ["Germany","USA","UK","Italy","Iraq"], imports: ["China","Russia","Germany","Switzerland","Italy"] } },
+    "IRN":  { exports: 53,   imports: 61,   partners: { exports: ["China","Iraq","UAE","Turkey","Afghanistan"], imports: ["China","UAE","Turkey","Germany","South Korea"] } },
+    "ARE":  { exports: 422,  imports: 380,  partners: { exports: ["India","Japan","China","Saudi Arabia","Iraq"], imports: ["China","India","USA","UK","Japan"] } },
+    "MYS":  { exports: 300,  imports: 263,  partners: { exports: ["Singapore","China","USA","Japan","South Korea"], imports: ["China","Singapore","Japan","USA","Taiwan"] } },
+    "VNM":  { exports: 355,  imports: 328,  partners: { exports: ["USA","China","South Korea","Japan","Hong Kong"], imports: ["China","South Korea","Japan","Singapore","Taiwan"] } },
+    "PHL":  { exports: 73,   imports: 120,  partners: { exports: ["USA","Japan","China","Hong Kong","Singapore"], imports: ["China","Japan","South Korea","USA","Singapore"] } },
+    "CHL":  { exports: 97,   imports: 87,   partners: { exports: ["China","USA","Japan","South Korea","Brazil"], imports: ["China","USA","Brazil","Argentina","Germany"] } },
+    "COL":  { exports: 58,   imports: 67,   partners: { exports: ["USA","Panama","Netherlands","Ecuador","Turkey"], imports: ["USA","China","Mexico","Brazil","Germany"] } },
+    "PER":  { exports: 60,   imports: 51,   partners: { exports: ["China","USA","Canada","Japan","South Korea"], imports: ["China","USA","Brazil","Argentina","Mexico"] } },
+    "PAK":  { exports: 30,   imports: 55,   partners: { exports: ["USA","China","UK","Germany","UAE"], imports: ["China","UAE","Indonesia","Malaysia","Kuwait"] } },
+    "BGD":  { exports: 55,   imports: 76,   partners: { exports: ["USA","Germany","UK","Spain","France"], imports: ["China","India","Singapore","Malaysia","Indonesia"] } },
+  }
+};
+
+// Copy 2023 data with small variations for other years
+["2022","2021","2020","2019"].forEach((yr, i) => {
+  const factor = 1 - (i + 1) * 0.05;
+  tradeData[yr] = {};
+  Object.entries(tradeData["2023"]).forEach(([iso, d]) => {
+    const jitter = 0.93 + Math.random() * 0.14;
+    tradeData[yr][iso] = {
+      exports: Math.round(d.exports * factor * jitter),
+      imports: Math.round(d.imports * factor * jitter),
+      partners: d.partners
+    };
+  });
+});
+
+// ISO 3166-1 alpha-3 → country name (for display)
+const isoNames = {
+  USA:"United States",CHN:"China",DEU:"Germany",JPN:"Japan",GBR:"United Kingdom",
+  FRA:"France",NLD:"Netherlands",KOR:"South Korea",ITA:"Italy",CAN:"Canada",
+  BEL:"Belgium",MEX:"Mexico",RUS:"Russia",SAU:"Saudi Arabia",SGP:"Singapore",
+  IND:"India",AUS:"Australia",ESP:"Spain",BRA:"Brazil",THA:"Thailand",
+  TWN:"Taiwan",CHE:"Switzerland",POL:"Poland",SWE:"Sweden",ZAF:"South Africa",
+  NGA:"Nigeria",EGY:"Egypt",ARG:"Argentina",IDN:"Indonesia",NOR:"Norway",
+  TUR:"Turkey",IRN:"Iran",ARE:"United Arab Emirates",MYS:"Malaysia",
+  VNM:"Vietnam",PHL:"Philippines",CHL:"Chile",COL:"Colombia",PER:"Peru",
+  PAK:"Pakistan",BGD:"Bangladesh"
+};
+
+// Reverse: name → ISO  (approximate, for TopoJSON matching)
+const nameToISO = {};
+Object.entries(isoNames).forEach(([iso, name]) => { nameToISO[name] = iso; });
+// Extra aliases
+const aliases = {
+  "United States of America":"USA","South Korea":"KOR","North Korea":"PRK",
+  "Russia":"RUS","Iran":"IRN","Syria":"SYR","Bolivia":"BOL",
+  "Venezuela":"VEN","Tanzania":"TZA","United Republic of Tanzania":"TZA",
+  "Democratic Republic of the Congo":"COD","Republic of the Congo":"COG",
+  "Ivory Coast":"CIV","Côte d'Ivoire":"CIV","South Sudan":"SSD",
+  "Somaliland":"SOM","Kosovo":"XKX","Taiwan":"TWN",
+  "United Arab Emirates":"ARE","Vietnam":"VNM"
+};
+
+function getISO(name) {
+  if (aliases[name]) return aliases[name];
+  return nameToISO[name] || null;
+}
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+const svg = d3.select("#map");
+const g   = svg.append("g");
+let width, height, projection, path, zoom, colorScale;
+
+const tooltip = document.getElementById("tooltip");
+let selectedISO = null;
+
+// ─── Color scales ─────────────────────────────────────────────────────────────
+function buildColorScale(metric, data) {
+  const vals = Object.values(data).map(d => metricValue(d, metric)).filter(v => v !== null);
+  if (metric === "balance") {
+    const ext = d3.max(vals.map(Math.abs));
+    return d3.scaleDiverging([-ext, 0, ext], d3.interpolateRdYlGn);
+  }
+  const [lo, hi] = d3.extent(vals);
+  return d3.scaleSequential([lo, hi], d3.interpolateYlOrRd);
+}
+
+function metricValue(d, metric) {
+  if (!d) return null;
+  if (metric === "total")   return d.exports + d.imports;
+  if (metric === "exports") return d.exports;
+  if (metric === "imports") return d.imports;
+  if (metric === "balance") return d.exports - d.imports;
+  return null;
+}
+
+// ─── Legend ───────────────────────────────────────────────────────────────────
+function drawLegend(scale, metric) {
+  const canvas = document.getElementById("legend-canvas");
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width = 160, h = canvas.height = 10;
+  for (let i = 0; i < w; i++) {
+    ctx.fillStyle = scale(scale.domain()[0] + (scale.domain()[scale.domain().length-1] - scale.domain()[0]) * i / w);
+    ctx.fillRect(i, 0, 1, h);
+  }
+  const dom = scale.domain();
+  const lo = dom[0], hi = dom[dom.length-1];
+  document.getElementById("legend-ticks").innerHTML =
+    `<span>${fmt(lo)}</span><span>${fmt((lo+hi)/2)}</span><span>${fmt(hi)}</span>`;
+  document.getElementById("legend-title").textContent =
+    { total:"Total Trade", exports:"Exports", imports:"Imports", balance:"Trade Balance" }[metric] + " (USD)";
+}
+
+function fmt(v) {
+  if (Math.abs(v) >= 1000) return (v/1000).toFixed(1) + "T";
+  if (Math.abs(v) >= 1)    return v.toFixed(0) + "B";
+  return v.toFixed(1) + "B";
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function showCountry(iso, metric) {
+  const year = document.getElementById("year-select").value;
+  const d = tradeData[year][iso];
+  document.getElementById("country-name").textContent = isoNames[iso] || iso;
+  document.getElementById("country-sub").textContent = "Trade data for " + year;
+  document.getElementById("no-data").style.display = "none";
+  const stats = document.getElementById("country-stats");
+  stats.style.display = "block";
+
+  if (!d) {
+    stats.innerHTML = `<div class="section-title">Statistics</div>
+      <p style="color:#8b949e;font-size:0.8rem;margin-top:8px">No data available for this country.</p>`;
+    return;
+  }
+
+  const balance = d.exports - d.imports;
+  const balClass = balance >= 0 ? "positive" : "negative";
+  const balSign  = balance >= 0 ? "+" : "";
+
+  // Top partners
+  const expPartners = d.partners.exports.slice(0, 5);
+  const impPartners = d.partners.imports.slice(0, 5);
+
+  function partnerBars(list, color) {
+    return list.map((p, i) => {
+      const pct = Math.round(100 - i * 15);
+      return `<div class="partner-item">
+        <span class="partner-name">${p}</span>
+        <div class="partner-bar-wrap"><div class="partner-bar" style="width:${pct}%;background:${color}"></div></div>
+        <span class="partner-value">~${pct}%</span>
+      </div>`;
+    }).join("");
+  }
+
+  stats.innerHTML = `
+    <div class="section-title">Key Figures</div>
+    <div class="stat-row"><span class="stat-label">Exports</span><span class="stat-value">$${fmt(d.exports)}</span></div>
+    <div class="stat-row"><span class="stat-label">Imports</span><span class="stat-value">$${fmt(d.imports)}</span></div>
+    <div class="stat-row"><span class="stat-label">Total Trade</span><span class="stat-value">$${fmt(d.exports+d.imports)}</span></div>
+    <div class="stat-row"><span class="stat-label">Trade Balance</span><span class="stat-value ${balClass}">${balSign}$${fmt(balance)}</span></div>
+
+    <div class="section-title" style="margin-top:18px">Top Export Partners</div>
+    ${partnerBars(expPartners, "#3fb950")}
+
+    <div class="section-title" style="margin-top:18px">Top Import Partners</div>
+    ${partnerBars(impPartners, "#58a6ff")}
+  `;
+}
+
+function clearSidebar() {
+  document.getElementById("country-name").textContent = "Click a country";
+  document.getElementById("country-sub").textContent = "to view trade details";
+  document.getElementById("no-data").style.display = "block";
+  document.getElementById("country-stats").style.display = "none";
+  selectedISO = null;
+}
+
+// ─── Map rendering ────────────────────────────────────────────────────────────
+function resize() {
+  const container = document.getElementById("map-container");
+  width  = container.clientWidth;
+  height = container.clientHeight;
+  svg.attr("viewBox", `0 0 ${width} ${height}`);
+  projection = d3.geoNaturalEarth1()
+    .scale(width / 6.28)
+    .translate([width / 2, height / 2]);
+  path = d3.geoPath().projection(projection);
+}
+
+function getMetricAndYear() {
+  return {
+    metric: document.getElementById("metric-select").value,
+    year:   document.getElementById("year-select").value
+  };
+}
+
+function updateColors() {
+  const { metric, year } = getMetricAndYear();
+  const data = tradeData[year];
+  colorScale = buildColorScale(metric, data);
+  drawLegend(colorScale, metric);
+
+  g.selectAll(".country").attr("fill", function() {
+    const iso = d3.select(this).attr("data-iso");
+    const d   = data[iso];
+    const val = metricValue(d, metric);
+    return val !== null ? colorScale(val) : "#2d333b";
+  });
+}
+
+// ─── Load world topology ──────────────────────────────────────────────────────
+fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+  .then(r => r.json())
+  .then(world => {
+    resize();
+    window.addEventListener("resize", () => { resize(); updateColors(); drawMap(world); });
+
+    const countries = topojson.feature(world, world.objects.countries);
+    const borders   = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+
+    // We need names — load a small lookup
+    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+      .then(() => {})  // already have it
+
+    // country id → name via a static map embedded here
+    const idToName = getIdToName();
+
+    // Set up zoom
+    zoom = d3.zoom()
+      .scaleExtent([0.8, 12])
+      .on("zoom", ({ transform }) => g.attr("transform", transform));
+    svg.call(zoom);
+
+    drawMap(world, countries, borders, idToName);
+    updateColors();
+
+    document.getElementById("zoom-in").onclick  = () => svg.transition().call(zoom.scaleBy, 1.5);
+    document.getElementById("zoom-out").onclick = () => svg.transition().call(zoom.scaleBy, 0.67);
+    document.getElementById("zoom-reset").onclick = () =>
+      svg.transition().call(zoom.transform, d3.zoomIdentity);
+  });
+
+function drawMap(world, countries, borders, idToName) {
+  g.selectAll("*").remove();
+
+  g.append("path").datum({type:"Sphere"})
+    .attr("class","sphere").attr("d", path);
+
+  g.append("path").datum(d3.geoGraticule()())
+    .attr("class","graticule").attr("d", path);
+
+  const { metric, year } = getMetricAndYear();
+  const data = tradeData[year];
+
+  g.selectAll(".country")
+    .data(countries.features)
+    .join("path")
+    .attr("class","country")
+    .attr("d", path)
+    .attr("data-iso", d => {
+      const name = idToName[d.id] || "";
+      return getISO(name) || "";
+    })
+    .attr("fill", d => {
+      const name = idToName[d.id] || "";
+      const iso  = getISO(name);
+      const val  = iso ? metricValue(data[iso], metric) : null;
+      return val !== null ? colorScale(val) : "#2d333b";
+    })
+    .on("mousemove", function(event, d) {
+      const name = idToName[d.id] || "Unknown";
+      const iso  = getISO(name);
+      const cdata = iso ? data[iso] : null;
+      const { metric } = getMetricAndYear();
+      const val = cdata ? metricValue(cdata, metric) : null;
+
+      let tipContent = `<strong>${name}</strong>`;
+      if (cdata) {
+        const metricLabels = { total:"Total Trade", exports:"Exports", imports:"Imports", balance:"Balance" };
+        tipContent += `<div class="tip-row"><span class="tip-label">${metricLabels[metric]}</span><span class="tip-val">$${fmt(val)}</span></div>`;
+        tipContent += `<div class="tip-row"><span class="tip-label">Exports</span><span class="tip-val">$${fmt(cdata.exports)}</span></div>`;
+        tipContent += `<div class="tip-row"><span class="tip-label">Imports</span><span class="tip-val">$${fmt(cdata.imports)}</span></div>`;
+      } else {
+        tipContent += `<div style="color:#8b949e;margin-top:4px">No data available</div>`;
+      }
+      tooltip.innerHTML = tipContent;
+
+      const rect = document.getElementById("map-container").getBoundingClientRect();
+      let tx = event.clientX - rect.left + 14;
+      let ty = event.clientY - rect.top  - 10;
+      if (tx + 230 > rect.width)  tx = event.clientX - rect.left - 230;
+      if (ty + 120 > rect.height) ty = event.clientY - rect.top  - 120;
+      tooltip.style.left    = tx + "px";
+      tooltip.style.top     = ty + "px";
+      tooltip.style.opacity = "1";
+    })
+    .on("mouseleave", () => { tooltip.style.opacity = "0"; })
+    .on("click", function(event, d) {
+      const name = idToName[d.id] || "";
+      const iso  = getISO(name);
+      if (!iso) return;
+
+      g.selectAll(".country").classed("selected", false);
+      d3.select(this).classed("selected", true);
+      selectedISO = iso;
+      const { metric } = getMetricAndYear();
+      showCountry(iso, metric);
+    });
+
+  g.append("path")
+    .datum(borders)
+    .attr("fill","none")
+    .attr("stroke","#1c2128")
+    .attr("stroke-width","0.5px")
+    .attr("d", path);
+}
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+document.getElementById("metric-select").addEventListener("change", () => {
+  updateColors();
+  if (selectedISO) showCountry(selectedISO, getMetricAndYear().metric);
+});
+
+document.getElementById("year-select").addEventListener("change", () => {
+  updateColors();
+  if (selectedISO) showCountry(selectedISO, getMetricAndYear().metric);
+});
+
+// ─── Country ID → Name lookup (numeric UN M.49 ↔ name) ───────────────────────
+function getIdToName() {
+  // Abbreviated lookup: TopoJSON countries-110m uses numeric ISO 3166-1 codes
+  return {
+    4:"Afghanistan",8:"Albania",12:"Algeria",24:"Angola",32:"Argentina",
+    36:"Australia",40:"Austria",50:"Bangladesh",56:"Belgium",68:"Bolivia",
+    76:"Brazil",100:"Bulgaria",116:"Cambodia",120:"Cameroon",124:"Canada",
+    152:"Chile",156:"China",170:"Colombia",180:"Dem. Rep. Congo",
+    178:"Congo",188:"Costa Rica",191:"Croatia",192:"Cuba",196:"Cyprus",
+    203:"Czechia",208:"Denmark",218:"Ecuador",818:"Egypt",
+    231:"Ethiopia",246:"Finland",250:"France",276:"Germany",288:"Ghana",
+    300:"Greece",320:"Guatemala",332:"Haiti",340:"Honduras",
+    348:"Hungary",356:"India",360:"Indonesia",364:"Iran",368:"Iraq",
+    372:"Ireland",376:"Israel",380:"Italy",388:"Jamaica",392:"Japan",
+    400:"Jordan",398:"Kazakhstan",404:"Kenya",408:"North Korea",
+    410:"South Korea",414:"Kuwait",418:"Laos",422:"Lebanon",
+    484:"Mexico",504:"Morocco",508:"Mozambique",516:"Namibia",
+    524:"Nepal",528:"Netherlands",554:"New Zealand",566:"Nigeria",
+    578:"Norway",586:"Pakistan",591:"Panama",598:"Papua New Guinea",
+    600:"Paraguay",604:"Peru",608:"Philippines",616:"Poland",
+    620:"Portugal",630:"Puerto Rico",634:"Qatar",642:"Romania",
+    643:"Russia",682:"Saudi Arabia",686:"Senegal",694:"Sierra Leone",
+    703:"Slovakia",706:"Somalia",710:"South Africa",716:"Zimbabwe",
+    724:"Spain",144:"Sri Lanka",729:"Sudan",752:"Sweden",
+    756:"Switzerland",760:"Syria",764:"Thailand",788:"Tunisia",
+    792:"Turkey",800:"Uganda",804:"Ukraine",784:"United Arab Emirates",
+    826:"United Kingdom",840:"United States of America",
+    858:"Uruguay",860:"Uzbekistan",862:"Venezuela",704:"Vietnam",
+    887:"Yemen",894:"Zambia",440:"Lithuania",428:"Latvia",233:"Estonia",
+    616:"Poland",703:"Slovakia",703:"Slovakia",191:"Croatia",
+    705:"Slovenia",348:"Hungary",100:"Bulgaria",642:"Romania",
+    300:"Greece",196:"Cyprus",470:"Malta",442:"Luxembourg",
+    56:"Belgium",528:"Netherlands",208:"Denmark",246:"Finland",
+    752:"Sweden",578:"Norway",352:"Iceland",
+    // Taiwan
+    158:"Taiwan",
+  };
+}
+</script>
+</body>
+</html>
