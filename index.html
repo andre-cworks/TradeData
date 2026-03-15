@@ -540,6 +540,7 @@ function getMetricAndYear() {
 }
 
 function updateColors() {
+  if (!_countries) return; // map not loaded yet
   const { metric, year } = getMetricAndYear();
   const data = tradeData[year];
   colorScale = buildColorScale(metric, data);
@@ -554,21 +555,16 @@ function updateColors() {
 }
 
 // ─── Load world topology ──────────────────────────────────────────────────────
+let _countries, _borders, _idToName;
+
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
   .then(r => r.json())
   .then(world => {
     resize();
-    window.addEventListener("resize", () => { resize(); updateColors(); drawMap(world); });
 
-    const countries = topojson.feature(world, world.objects.countries);
-    const borders   = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
-
-    // We need names — load a small lookup
-    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
-      .then(() => {})  // already have it
-
-    // country id → name via a static map embedded here
-    const idToName = getIdToName();
+    _countries = topojson.feature(world, world.objects.countries);
+    _borders   = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+    _idToName  = getIdToName();
 
     // Set up zoom
     zoom = d3.zoom()
@@ -576,8 +572,18 @@ fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
       .on("zoom", ({ transform }) => g.attr("transform", transform));
     svg.call(zoom);
 
-    drawMap(world, countries, borders, idToName);
-    updateColors();
+    // Build colorScale before drawMap so it can be used immediately
+    const { metric, year } = getMetricAndYear();
+    colorScale = buildColorScale(metric, tradeData[year]);
+    drawLegend(colorScale, metric);
+
+    drawMap(_countries, _borders, _idToName);
+
+    window.addEventListener("resize", () => {
+      resize();
+      colorScale = buildColorScale(getMetricAndYear().metric, tradeData[getMetricAndYear().year]);
+      drawMap(_countries, _borders, _idToName);
+    });
 
     document.getElementById("zoom-in").onclick  = () => svg.transition().call(zoom.scaleBy, 1.5);
     document.getElementById("zoom-out").onclick = () => svg.transition().call(zoom.scaleBy, 0.67);
@@ -585,7 +591,7 @@ fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
       svg.transition().call(zoom.transform, d3.zoomIdentity);
   });
 
-function drawMap(world, countries, borders, idToName) {
+function drawMap(countries, borders, idToName) {
   g.selectAll("*").remove();
 
   g.append("path").datum({type:"Sphere"})
@@ -603,17 +609,17 @@ function drawMap(world, countries, borders, idToName) {
     .attr("class","country")
     .attr("d", path)
     .attr("data-iso", d => {
-      const name = idToName[d.id] || "";
+      const name = idToName[+d.id] || "";
       return getISO(name) || "";
     })
     .attr("fill", d => {
-      const name = idToName[d.id] || "";
+      const name = idToName[+d.id] || "";
       const iso  = getISO(name);
       const val  = iso ? metricValue(data[iso], metric) : null;
       return val !== null ? colorScale(val) : "#2d333b";
     })
     .on("mousemove", function(event, d) {
-      const name = idToName[d.id] || "Unknown";
+      const name = idToName[+d.id] || "Unknown";
       const iso  = getISO(name);
       const cdata = iso ? data[iso] : null;
       const { metric } = getMetricAndYear();
@@ -641,7 +647,7 @@ function drawMap(world, countries, borders, idToName) {
     })
     .on("mouseleave", () => { tooltip.style.opacity = "0"; })
     .on("click", function(event, d) {
-      const name = idToName[d.id] || "";
+      const name = idToName[+d.id] || "";
       const iso  = getISO(name);
       if (!iso) return;
 
