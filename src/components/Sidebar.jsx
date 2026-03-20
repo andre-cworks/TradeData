@@ -104,8 +104,135 @@ function LeverageRow({ partnerName, iso, selectedISO, year }) {
   );
 }
 
+// ── CountryColumn: the full detail view for one country ───────────────────────
+function CountryColumn({ iso, year }) {
+  const d = tradeData[year]?.[iso];
+  const countryName = isoNames[iso] || iso;
+
+  if (!d) {
+    return (
+      <div className="sidebar-content">
+        <div className="section-title">Statistics</div>
+        <p className="no-data">No data available for this country in {year}.</p>
+      </div>
+    );
+  }
+
+  const balance  = d.exports - d.imports;
+  const balClass = balance >= 0 ? 'positive' : 'negative';
+  const balSign  = balance >= 0 ? '+' : '';
+
+  const expYoY = yoyChange(iso, year, 'exports');
+  const impYoY = yoyChange(iso, year, 'imports');
+  const balYoY = yoyChange(iso, year, 'balance');
+
+  const gd2 = goodsData[iso];
+  const maxGoodsVal = gd2
+    ? Math.max(...gd2.exports.map(g => g.v), ...gd2.imports.map(g => g.v))
+    : 1;
+
+  const concentration = sectorConcentration(iso, goodsData);
+
+  function nameToISOFn(name) {
+    return Object.entries(isoNames).find(([, n]) => n === name)?.[0] || null;
+  }
+
+  const topExportPartners = d.partners.exports.slice(0, 5);
+  const topImportPartners = d.partners.imports.slice(0, 5);
+
+  return (
+    <div className="sidebar-content">
+
+      {/* ── Key Figures ── */}
+      <div className="section-title">Key Figures</div>
+
+      <div className="stat-row">
+        <span className="stat-label">Exports</span>
+        <span className="stat-value">${fmt(d.exports)} <YoYBadge pct={expYoY} /></span>
+      </div>
+      <div className="stat-row">
+        <span className="stat-label">Imports</span>
+        <span className="stat-value">${fmt(d.imports)} <YoYBadge pct={impYoY} /></span>
+      </div>
+      <div className="stat-row">
+        <span className="stat-label">Total Trade</span>
+        <span className="stat-value">${fmt(d.exports + d.imports)}</span>
+      </div>
+      <div className="stat-row">
+        <span className="stat-label">Trade Balance</span>
+        <span className={`stat-value ${balClass}`}>{balSign}${fmt(balance)} <YoYBadge pct={balYoY} /></span>
+      </div>
+
+      {/* ── Sparklines ── */}
+      <div className="sparkline-row">
+        <div className="sparkline-item">
+          <span className="sparkline-label">Exports</span>
+          <Sparkline iso={iso} metric="exports" upToYear={year} />
+        </div>
+        <div className="sparkline-item">
+          <span className="sparkline-label">Imports</span>
+          <Sparkline iso={iso} metric="imports" upToYear={year} />
+        </div>
+        <div className="sparkline-item">
+          <span className="sparkline-label">Balance</span>
+          <Sparkline iso={iso} metric="balance" upToYear={year} />
+        </div>
+      </div>
+
+      {/* ── Sector Concentration ── */}
+      {concentration && (
+        <>
+          <div className="section-title" style={{ marginTop: 16 }}>Export Concentration</div>
+          <div className="concentration-row">
+            <span className="concentration-name">{concentration.topCategory}</span>
+            <span className="concentration-pct">{concentration.pct.toFixed(0)}% of exports</span>
+            <span className={`concentration-badge badge-${concentration.level}`}>
+              {concentration.level === 'concentrated' ? '⚠ Concentrated'
+                : concentration.level === 'moderate' ? '~ Moderate'
+                : '✓ Diversified'}
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* ── Goods breakdown ── */}
+      {gd2 && (
+        <>
+          <div className="section-title" style={{ marginTop: 16 }}>Top Export Goods</div>
+          <GoodsBars list={gd2.exports} color="#3fb950" maxVal={maxGoodsVal} />
+          <div className="section-title" style={{ marginTop: 16 }}>Top Import Goods</div>
+          <GoodsBars list={gd2.imports} color="#58a6ff" maxVal={maxGoodsVal} />
+        </>
+      )}
+
+      {/* ── Trade Partners ── */}
+      <div className="section-title" style={{ marginTop: 16 }}>Top Export Partners</div>
+      <PartnerBars list={topExportPartners} color="#3fb950" />
+
+      <div className="section-title" style={{ marginTop: 16 }}>Top Import Partners</div>
+      <PartnerBars list={topImportPartners} color="#58a6ff" />
+
+      {/* ── Mutual Leverage Analysis ── */}
+      <div className="section-title" style={{ marginTop: 16 }}>Leverage Analysis</div>
+      <p className="no-data" style={{ fontSize: '0.7rem', marginBottom: 6 }}>
+        Does the partner also rely on {countryName}?
+      </p>
+      {[...new Set([...topExportPartners, ...topImportPartners])].slice(0, 6).map(name => (
+        <LeverageRow
+          key={name}
+          partnerName={name}
+          iso={nameToISOFn(name)}
+          selectedISO={iso}
+          year={year}
+        />
+      ))}
+
+    </div>
+  );
+}
+
 // ── Main Sidebar ──────────────────────────────────────────────────────────────
-export default function Sidebar({ year, selectedISO }) {
+export default function Sidebar({ year, selectedISO, compareISO, compareMode, onCompare, onClearCompare }) {
   if (!selectedISO) {
     return (
       <aside className="sidebar">
@@ -122,143 +249,59 @@ export default function Sidebar({ year, selectedISO }) {
     );
   }
 
-  const d = tradeData[year]?.[selectedISO];
-  const gd = goodsData[selectedISO];
-  const countryName = isoNames[selectedISO] || selectedISO;
-
-  if (!d) {
-    return (
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h2>{countryName}</h2>
-          <p>Trade data for {year}</p>
-        </div>
-        <div className="sidebar-content">
-          <div className="section-title">Statistics</div>
-          <p className="no-data">No data available for this country.</p>
-        </div>
-      </aside>
-    );
-  }
-
-  const balance  = d.exports - d.imports;
-  const balClass = balance >= 0 ? 'positive' : 'negative';
-  const balSign  = balance >= 0 ? '+' : '';
-
-  const expYoY = yoyChange(selectedISO, year, 'exports');
-  const impYoY = yoyChange(selectedISO, year, 'imports');
-  const balYoY = yoyChange(selectedISO, year, 'balance');
-
-  const gd2 = goodsData[selectedISO];
-  const maxGoodsVal = gd2
-    ? Math.max(...gd2.exports.map(g => g.v), ...gd2.imports.map(g => g.v))
-    : 1;
-
-  const concentration = sectorConcentration(selectedISO, goodsData);
-
-  // Build leverage partner ISOs from partner names
-  const { nameToISO: _nameToISO } = {};
-  // We'll get isoNames from the import
-  function nameToISOFn(name) {
-    return Object.entries(isoNames).find(([, n]) => n === name)?.[0] || null;
-  }
-
-  const topExportPartners = d.partners.exports.slice(0, 5);
-  const topImportPartners = d.partners.imports.slice(0, 5);
+  const primaryName = isoNames[selectedISO] || selectedISO;
+  const compareName = compareISO ? (isoNames[compareISO] || compareISO) : null;
+  const isCompareActive = !!compareISO;
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${isCompareActive ? ' compare-active' : ''}`}>
       <div className="sidebar-header">
-        <h2>{countryName}</h2>
-        <p>Trade data for {year}</p>
-      </div>
-      <div className="sidebar-content">
-
-        {/* ── Key Figures ── */}
-        <div className="section-title">Key Figures</div>
-
-        <div className="stat-row">
-          <span className="stat-label">Exports</span>
-          <span className="stat-value">${fmt(d.exports)} <YoYBadge pct={expYoY} /></span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">Imports</span>
-          <span className="stat-value">${fmt(d.imports)} <YoYBadge pct={impYoY} /></span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">Total Trade</span>
-          <span className="stat-value">${fmt(d.exports + d.imports)}</span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">Trade Balance</span>
-          <span className={`stat-value ${balClass}`}>{balSign}${fmt(balance)} <YoYBadge pct={balYoY} /></span>
-        </div>
-
-        {/* ── Sparklines ── */}
-        <div className="sparkline-row">
-          <div className="sparkline-item">
-            <span className="sparkline-label">Exports</span>
-            <Sparkline iso={selectedISO} metric="exports" upToYear={year} />
-          </div>
-          <div className="sparkline-item">
-            <span className="sparkline-label">Imports</span>
-            <Sparkline iso={selectedISO} metric="imports" upToYear={year} />
-          </div>
-          <div className="sparkline-item">
-            <span className="sparkline-label">Balance</span>
-            <Sparkline iso={selectedISO} metric="balance" upToYear={year} />
-          </div>
-        </div>
-
-        {/* ── Sector Concentration ── */}
-        {concentration && (
-          <>
-            <div className="section-title" style={{ marginTop: 16 }}>Export Concentration</div>
-            <div className="concentration-row">
-              <span className="concentration-name">{concentration.topCategory}</span>
-              <span className="concentration-pct">{concentration.pct.toFixed(0)}% of exports</span>
-              <span className={`concentration-badge badge-${concentration.level}`}>
-                {concentration.level === 'concentrated' ? '⚠ Concentrated'
-                  : concentration.level === 'moderate' ? '~ Moderate'
-                  : '✓ Diversified'}
-              </span>
+        {isCompareActive ? (
+          <div className="compare-header-row">
+            <div className="compare-col-title">
+              <span>{primaryName}</span>
             </div>
-          </>
-        )}
-
-        {/* ── Goods breakdown ── */}
-        {gd2 && (
+            <div className="compare-col-divider" />
+            <div className="compare-col-title">
+              <span>{compareName}</span>
+              <button className="compare-clear-btn" onClick={onClearCompare} title="Clear comparison">×</button>
+            </div>
+          </div>
+        ) : (
           <>
-            <div className="section-title" style={{ marginTop: 16 }}>Top Export Goods</div>
-            <GoodsBars list={gd2.exports} color="#3fb950" maxVal={maxGoodsVal} />
-            <div className="section-title" style={{ marginTop: 16 }}>Top Import Goods</div>
-            <GoodsBars list={gd2.imports} color="#58a6ff" maxVal={maxGoodsVal} />
+            <div className="sidebar-header-row">
+              <div>
+                <h2>{primaryName}</h2>
+                <p>Trade data for {year}</p>
+              </div>
+              {!compareMode && (
+                <button className="compare-btn" onClick={onCompare} title="Compare with another country">
+                  ⇄ Compare
+                </button>
+              )}
+            </div>
+            {compareMode && (
+              <div className="compare-hint">
+                Click a country on the map to compare
+                <button className="compare-cancel-btn" onClick={onClearCompare}>×</button>
+              </div>
+            )}
           </>
         )}
-
-        {/* ── Trade Partners ── */}
-        <div className="section-title" style={{ marginTop: 16 }}>Top Export Partners</div>
-        <PartnerBars list={topExportPartners} color="#3fb950" />
-
-        <div className="section-title" style={{ marginTop: 16 }}>Top Import Partners</div>
-        <PartnerBars list={topImportPartners} color="#58a6ff" />
-
-        {/* ── Mutual Leverage Analysis ── */}
-        <div className="section-title" style={{ marginTop: 16 }}>Leverage Analysis</div>
-        <p className="no-data" style={{ fontSize: '0.7rem', marginBottom: 6 }}>
-          Does the partner also rely on {countryName}?
-        </p>
-        {[...new Set([...topExportPartners, ...topImportPartners])].slice(0, 6).map(name => (
-          <LeverageRow
-            key={name}
-            partnerName={name}
-            iso={nameToISOFn(name)}
-            selectedISO={selectedISO}
-            year={year}
-          />
-        ))}
-
       </div>
+
+      {isCompareActive ? (
+        <div className="compare-columns">
+          <div className="compare-col">
+            <CountryColumn iso={selectedISO} year={year} />
+          </div>
+          <div className="compare-col">
+            <CountryColumn iso={compareISO} year={year} />
+          </div>
+        </div>
+      ) : (
+        <CountryColumn iso={selectedISO} year={year} />
+      )}
     </aside>
   );
 }

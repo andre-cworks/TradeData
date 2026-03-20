@@ -426,6 +426,130 @@ svg.sparkline { display: block; }
 .lev-they   { background: #3fb95020; color: #3fb950; }
 .lev-none   { background: #30363d;   color: #6e7681; }
 
+/* ── Compare Mode ── */
+.sidebar.compare-active {
+  width: 560px;
+}
+
+.compare-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.compare-col {
+  border-right: 1px solid #30363d;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.compare-col:last-child {
+  border-right: none;
+}
+
+.compare-col::-webkit-scrollbar { width: 4px; }
+.compare-col::-webkit-scrollbar-track { background: transparent; }
+.compare-col::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+
+.compare-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 100%;
+}
+
+.compare-col-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e6edf3;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.compare-col-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-col-divider {
+  width: 1px;
+  background: #30363d;
+  align-self: stretch;
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+.sidebar-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.compare-btn {
+  font-size: 0.67rem;
+  padding: 3px 8px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.compare-btn:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.compare-hint {
+  font-size: 0.72rem;
+  color: #e3b341;
+  padding: 5px 14px;
+  background: #e3b34110;
+  border-top: 1px solid #e3b34130;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px -14px -12px;
+}
+
+.compare-cancel-btn,
+.compare-clear-btn {
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.compare-cancel-btn:hover,
+.compare-clear-btn:hover {
+  color: #f85149;
+}
+
+.country.compare-highlighted {
+  stroke: #e3b341 !important;
+  stroke-width: 2px !important;
+}
+
+.map-container.compare-mode-cursor {
+  cursor: crosshair;
+}
+
 /* ── Rankings Panel ── */
 .rankings-panel {
   width: 380px;

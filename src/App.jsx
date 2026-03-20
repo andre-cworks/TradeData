@@ -9,6 +9,21 @@ export default function App() {
   const [metric, setMetric]         = useState('total');
   const [selectedISO, setSelected]  = useState(null);
   const [showRankings, setRankings] = useState(false);
+  const [compareISO, setCompareISO] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+
+  function handleSelectCountry(iso) {
+    if (compareMode) {
+      setCompareISO(iso);
+      setCompareMode(false);
+    } else {
+      setSelected(iso);
+      setCompareISO(null);
+    }
+  }
+
+  function handleStartCompare() { setCompareMode(true); }
+  function handleCancelCompare() { setCompareMode(false); setCompareISO(null); }
 
   return (
     <div className="app">
@@ -52,15 +67,24 @@ export default function App() {
           year={year}
           metric={metric}
           selectedISO={selectedISO}
-          onSelectCountry={setSelected}
+          compareISO={compareISO}
+          compareMode={compareMode}
+          onSelectCountry={handleSelectCountry}
         />
-        <Sidebar year={year} selectedISO={selectedISO} />
+        <Sidebar
+          year={year}
+          selectedISO={selectedISO}
+          compareISO={compareISO}
+          compareMode={compareMode}
+          onCompare={handleStartCompare}
+          onClearCompare={handleCancelCompare}
+        />
         {showRankings && (
           <RankingsPanel
             year={year}
             metric={metric}
             selectedISO={selectedISO}
-            onSelectCountry={setSelected}
+            onSelectCountry={handleSelectCountry}
           />
         )}
       </div>

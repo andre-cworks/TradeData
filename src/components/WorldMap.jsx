@@ -12,7 +12,7 @@ const METRIC_LABELS = {
 };
 const TOPO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-export default function WorldMap({ year, metric, selectedISO, onSelectCountry }) {
+export default function WorldMap({ year, metric, selectedISO, compareISO, compareMode, onSelectCountry }) {
   const containerRef  = useRef(null);
   const svgRef        = useRef(null);
   const gRef          = useRef(null);
@@ -29,10 +29,12 @@ export default function WorldMap({ year, metric, selectedISO, onSelectCountry })
   const metricRef    = useRef(metric);
   const onSelectRef  = useRef(onSelectCountry);
   const selectedRef  = useRef(selectedISO);
+  const compareRef   = useRef(compareISO);
   useEffect(() => { yearRef.current = year; },             [year]);
   useEffect(() => { metricRef.current = metric; },         [metric]);
   useEffect(() => { onSelectRef.current = onSelectCountry; }, [onSelectCountry]);
   useEffect(() => { selectedRef.current = selectedISO; },  [selectedISO]);
+  useEffect(() => { compareRef.current = compareISO; },    [compareISO]);
 
   const [tooltip, setTooltip]     = useState({ visible: false, x: 0, y: 0, html: '' });
   const [legendInfo, setLegendInfo] = useState(null);
@@ -59,6 +61,14 @@ export default function WorldMap({ year, metric, selectedISO, onSelectCountry })
       return d3.select(this).attr('data-iso') === selectedISO;
     });
   }, [selectedISO]);
+
+  // ── Sync compare country highlight (amber border) ────────────────────────────
+  useEffect(() => {
+    if (!gRef.current) return;
+    gRef.current.selectAll('.country').classed('compare-highlighted', function () {
+      return d3.select(this).attr('data-iso') === compareISO;
+    });
+  }, [compareISO]);
 
   // ── Draw arcs when selectedISO or year changes ───────────────────────────────
   useEffect(() => {
@@ -192,6 +202,7 @@ export default function WorldMap({ year, metric, selectedISO, onSelectCountry })
         return val !== null ? scale(val) : '#2d333b';
       })
       .classed('selected', d => getISO(idToName[+d.id] || '') === selectedRef.current)
+      .classed('compare-highlighted', d => getISO(idToName[+d.id] || '') === compareRef.current)
       .on('mousemove', function (event, d) {
         const name  = idToName[+d.id] || 'Unknown';
         const iso   = getISO(name);
@@ -250,7 +261,7 @@ export default function WorldMap({ year, metric, selectedISO, onSelectCountry })
   }
 
   return (
-    <div ref={containerRef} className="map-container">
+    <div ref={containerRef} className={`map-container${compareMode ? ' compare-mode-cursor' : ''}`}>
       <svg ref={svgRef} />
 
       <div className="zoom-controls">
