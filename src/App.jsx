@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import WorldMap from './components/WorldMap';
 import Sidebar from './components/Sidebar';
+import RankingsPanel from './components/RankingsPanel';
 import './App.css';
 
 export default function App() {
-  const [year, setYear]           = useState('2024');
-  const [metric, setMetric]       = useState('total');
-  const [selectedISO, setSelected] = useState(null);
+  const [year, setYear]             = useState('2024');
+  const [metric, setMetric]         = useState('total');
+  const [selectedISO, setSelected]  = useState(null);
+  const [showRankings, setRankings] = useState(false);
 
   return (
     <div className="app">
@@ -20,6 +22,7 @@ export default function App() {
               <option value="exports">Exports</option>
               <option value="imports">Imports</option>
               <option value="balance">Trade Balance</option>
+              <option value="dependency">Partner Dependency</option>
             </select>
           </label>
           <label>
@@ -34,6 +37,13 @@ export default function App() {
               <option value="2019">2019</option>
             </select>
           </label>
+          <button
+            className={`rankings-toggle ${showRankings ? 'active' : ''}`}
+            onClick={() => setRankings(r => !r)}
+            title="Toggle global rankings panel"
+          >
+            ≡ Rankings
+          </button>
         </div>
       </header>
 
@@ -45,6 +55,14 @@ export default function App() {
           onSelectCountry={setSelected}
         />
         <Sidebar year={year} selectedISO={selectedISO} />
+        {showRankings && (
+          <RankingsPanel
+            year={year}
+            metric={metric}
+            selectedISO={selectedISO}
+            onSelectCountry={setSelected}
+          />
+        )}
       </div>
     </div>
   );
